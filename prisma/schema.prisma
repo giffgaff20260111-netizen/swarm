@@ -1,0 +1,186 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Organization {
+  id        String   @id
+  name      String
+  users     User[]
+  agents    AgentDefinition[]
+  tasks     Task[]
+  sources   KnowledgeSource[]
+  createdAt DateTime @default(now())
+}
+
+model User {
+  id             String        @id
+  organizationId String
+  email          String        @unique
+  name           String
+  role           String
+  passwordHash   String
+  organization   Organization  @relation(fields: [organizationId], references: [id])
+  tasks          Task[]
+  approvals      ApprovalRequest[] @relation("ApprovalRequester")
+  feedback       TaskFeedback[]
+  sources        KnowledgeSource[]
+  createdAt      DateTime      @default(now())
+}
+
+model AgentDefinition {
+  id                 String       @id
+  organizationId     String
+  name               String
+  type               String
+  responsibility     String
+  capabilityTagsJson String
+  toolsJson          String
+  knowledgeScopeJson String
+  riskLevel          String
+  inputContract      String
+  outputContract     String
+  examplesJson       String
+  acceptanceJson     String
+  enabled            Boolean      @default(true)
+  organization       Organization @relation(fields: [organizationId], references: [id])
+  nodes              TaskNode[]
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+}
+
+model Task {
+  id             String            @id
+  organizationId String
+  createdByUserId String
+  title          String
+  kind           String
+  status         String
+  summary        String
+  organization   Organization      @relation(fields: [organizationId], references: [id])
+  createdBy      User              @relation(fields: [createdByUserId], references: [id])
+  nodes          TaskNode[]
+  edges          TaskEdge[]
+  artifacts      Artifact[]
+  approvals      ApprovalRequest[]
+  auditEvents    AuditEvent[]
+  feedback       TaskFeedback[]
+  knowledgeRefs  KnowledgeReference[]
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+}
+
+model TaskNode {
+  id              String           @id
+  taskId          String
+  objective       String
+  assignedAgentId String
+  status          String
+  summary         String
+  task            Task             @relation(fields: [taskId], references: [id])
+  assignedAgent   AgentDefinition  @relation(fields: [assignedAgentId], references: [id])
+  outgoingEdges   TaskEdge[]       @relation("TaskEdgeFrom")
+  incomingEdges   TaskEdge[]       @relation("TaskEdgeTo")
+  approvals       ApprovalRequest[]
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+}
+
+model TaskEdge {
+  id         String   @id
+  taskId     String
+  fromNodeId String
+  toNodeId   String
+  task       Task     @relation(fields: [taskId], references: [id])
+  fromNode   TaskNode @relation("TaskEdgeFrom", fields: [fromNodeId], references: [id])
+  toNode     TaskNode @relation("TaskEdgeTo", fields: [toNodeId], references: [id])
+}
+
+model Artifact {
+  id        String   @id
+  taskId    String
+  name      String
+  kind      String
+  uri       String
+  task      Task     @relation(fields: [taskId], references: [id])
+  createdAt DateTime @default(now())
+}
+
+model ApprovalRequest {
+  id                String   @id
+  taskId            String
+  nodeId            String
+  requestedByUserId String
+  status            String
+  riskReason        String
+  task              Task     @relation(fields: [taskId], references: [id])
+  node              TaskNode @relation(fields: [nodeId], references: [id])
+  requestedBy       User     @relation("ApprovalRequester", fields: [requestedByUserId], references: [id])
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+model AuditEvent {
+  id        String   @id
+  taskId    String
+  type      String
+  message   String
+  task      Task     @relation(fields: [taskId], references: [id])
+  createdAt DateTime @default(now())
+}
+
+model TaskFeedback {
+  id        String   @id
+  taskId    String
+  userId    String
+  message   String
+  task      Task     @relation(fields: [taskId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+}
+
+model KnowledgeSource {
+  id                String              @id
+  organizationId    String
+  uploadedByUserId  String
+  title             String
+  collection        String
+  content           String
+  version           Int
+  hash              String
+  organization      Organization        @relation(fields: [organizationId], references: [id])
+  uploadedBy        User                @relation(fields: [uploadedByUserId], references: [id])
+  compiledWikis     CompiledWiki[]
+  knowledgeRefs     KnowledgeReference[]
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+}
+
+model CompiledWiki {
+  id              String              @id
+  sourceId        String
+  collection      String
+  version         Int
+  content         String
+  active          Boolean             @default(true)
+  source          KnowledgeSource     @relation(fields: [sourceId], references: [id])
+  knowledgeRefs   KnowledgeReference[]
+  createdAt       DateTime            @default(now())
+}
+
+model KnowledgeReference {
+  id              String          @id
+  taskId          String
+  sourceId        String
+  wikiId          String
+  collection      String
+  usedCompiledWiki Boolean
+  task            Task            @relation(fields: [taskId], references: [id])
+  source          KnowledgeSource @relation(fields: [sourceId], references: [id])
+  wiki            CompiledWiki    @relation(fields: [wikiId], references: [id])
+  createdAt       DateTime        @default(now())
+}
